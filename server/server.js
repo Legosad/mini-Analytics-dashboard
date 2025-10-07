@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import connectDB from "./config/db.js";
+import authRoutes from "./routes/auth.js"
 
 dotenv.config()
 
@@ -20,6 +21,9 @@ app.get('/', (req, res) => {
     message: 'Blog Analytics API is running!' 
   });
 });
+
+app.use("/api/auth", authRoutes)
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -40,11 +44,14 @@ app.use((req, res) => {
   });
 });
 
+
+
 // Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV}`);
 });
+
 
 
