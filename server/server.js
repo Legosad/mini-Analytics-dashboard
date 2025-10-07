@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/auth.js"
 import postRoutes from "./routes/post.js"
+import commentRoutes from "./routes/comment.js"
+import insightRoutes from "./routes/insights.js"
 
 dotenv.config()
 
@@ -25,6 +27,8 @@ app.get('/', (req, res) => {
 
 app.use("/api/auth", authRoutes)
 app.use("/api/posts", postRoutes)
+app.use("/api/comment", commentRoutes)
+app.use('/api/insights', insightRoutes);
 
 
 // Error handling middleware
