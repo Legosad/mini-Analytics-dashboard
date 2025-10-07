@@ -1,36 +1,27 @@
-import Post from '../models/Post.js';
-import Comment from '../models/Comment.js';
+import Post from "../models/Post.js";
+import Comment from "../models/Comment.js";
 
 // @desc    Create a new blog post
 // @route   POST /api/posts
 // @access  Public
 export const createPost = async (req, res) => {
   try {
-    const { title, content, author } = req.body;
-
-    // Validation
-    if (!title || !content || !author) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide title, content, and author'
-      });
+    const { title, content } = req.body; // ⬅️ no 'author' from client
+    if (!title || !content) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Please provide title and content" });
     }
 
     const post = await Post.create({
       title,
       content,
-      author
+      author: req.user.username, // ⬅️ take from authenticated user
     });
 
-    res.status(201).json({
-      success: true,
-      data: post
-    });
+    res.status(201).json({ success: true, data: post });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -43,17 +34,17 @@ export const getAllPosts = async (req, res) => {
 
     // Build query
     let query = {};
-    
+
     // Filter by author (bonus feature)
     if (author) {
-      query.author = { $regex: author, $options: 'i' };
+      query.author = { $regex: author, $options: "i" };
     }
 
     // Search in title or content (bonus feature)
     if (search) {
       query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { content: { $regex: search, $options: 'i' } }
+        { title: { $regex: search, $options: "i" } },
+        { content: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -65,25 +56,25 @@ export const getAllPosts = async (req, res) => {
       { $match: query },
       {
         $lookup: {
-          from: 'comments',
-          localField: '_id',
-          foreignField: 'post',
-          as: 'comments'
-        }
+          from: "comments",
+          localField: "_id",
+          foreignField: "post",
+          as: "comments",
+        },
       },
       {
         $addFields: {
-          commentCount: { $size: '$comments' }
-        }
+          commentCount: { $size: "$comments" },
+        },
       },
       {
         $project: {
-          comments: 0 // Don't include full comments array
-        }
+          comments: 0, // Don't include full comments array
+        },
       },
       { $sort: { createdAt: -1 } },
       { $skip: skip },
-      { $limit: parseInt(limit) }
+      { $limit: parseInt(limit) },
     ]);
 
     // Get total count for pagination
@@ -96,20 +87,17 @@ export const getAllPosts = async (req, res) => {
         page: parseInt(page),
         limit: parseInt(limit),
         total,
-        pages: Math.ceil(total / limit)
-      }
+        pages: Math.ceil(total / limit),
+      },
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
 
-// @desc    Get single post by ID
-// @route   GET /api/posts/:id
-// @access  Public
 export const getPostById = async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
@@ -117,7 +105,7 @@ export const getPostById = async (req, res) => {
     if (!post) {
       return res.status(404).json({
         success: false,
-        message: 'Post not found'
+        message: "Post not found",
       });
     }
 
@@ -128,74 +116,66 @@ export const getPostById = async (req, res) => {
       success: true,
       data: {
         ...post.toObject(),
-        commentCount
-      }
+        commentCount,
+      },
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
 
-// @desc    Update a post
-// @route   PUT /api/posts/:id
-// @access  Public
 export const updatePost = async (req, res) => {
   try {
-    const { title, content, author } = req.body;
+    const { title, content } = req.body;
+    const post = await Post.findById(req.params.id);
+    if (!post)
+      return res
+        .status(404)
+        .json({ success: false, message: "Post not found" });
 
-    const post = await Post.findByIdAndUpdate(
-      req.params.id,
-      { title, content, author },
-      { new: true, runValidators: true }
-    );
-
-    if (!post) {
-      return res.status(404).json({
+    if (post.author !== req.user.username) {
+      return res.status(403).json({
         success: false,
-        message: 'Post not found'
+        message: "Not authorized to update this post",
       });
     }
 
-    res.status(200).json({
-      success: true,
-      data: post
-    });
+    post.title = title ?? post.title;
+    post.content = content ?? post.content;
+    await post.save();
+
+    res.status(200).json({ success: true, data: post });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Delete a post
-// @route   DELETE /api/posts/:id
-// @access  Public
 export const deletePost = async (req, res) => {
   try {
-    const post = await Post.findByIdAndDelete(req.params.id);
+    const post = await Post.findById(req.params.id);
+    if (!post)
+      return res
+        .status(404)
+        .json({ success: false, message: "Post not found" });
 
-    if (!post) {
-      return res.status(404).json({
+    if (post.author !== req.user.username) {
+      return res.status(403).json({
         success: false,
-        message: 'Post not found'
+        message: "Not authorized to delete this post",
       });
     }
 
-    // Also delete all comments for this post
+    await post.deleteOne();
     await Comment.deleteMany({ post: req.params.id });
 
     res.status(200).json({
       success: true,
-      message: 'Post and associated comments deleted successfully'
+      message: "Post and associated comments deleted successfully",
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
